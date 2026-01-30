@@ -84,7 +84,7 @@ TARGET_AUDIENCES = {
 }
 
 VIDEO_PLATFORMS = {
-    "Sora": "https://sora.openai.com",
+    "Sora": "https://sora.chatgpt.com",
     "Runway": "https://runwayml.com",
     "Pika": "https://pika.art",
     "Luma Dream Machine": "https://lumalabs.ai"
@@ -100,52 +100,21 @@ CONTENT_PACKAGES = {
 }
 
 DEFAULT_IMAGE_STYLE = """
-Professional documentary photography, ultra-realistic, natural Korean everyday life.
+PHOTO-REALISTIC Korean documentary style. Shot on Canon EOS R5, 35mm f/1.8, natural daylight.
 
-Location: Real, existing places in South Korea - actual Korean neighborhoods, parks, community centers, schools, markets, public spaces.
-NO fictional or futuristic settings. NO sci-fi elements. NO fantasy elements.
+Korean People: Natural Korean faces, realistic skin texture, genuine expressions, casual Korean clothing (NOT costumes). Ages 20s-60s with natural features. NO AI artifacts, NO perfect symmetry, NO filtered faces.
 
-Architecture and Setting:
-- Contemporary but realistic Korean buildings and infrastructure
-- Real Korean streets, parks, homes, offices as they currently exist
-- Authentic Korean urban and suburban environments
-- Current-day Korean public spaces and facilities
+Location: Real Korean settings - apartments, offices, parks, cafes (Seoul/Busan style). Modern Korean architecture (2010s-2020s). Background: Korean streetscape, but NO readable text/signs.
 
-People:
-- Natural Korean people in everyday situations
-- Realistic Korean facial features, expressions, skin tones
-- Authentic Korean body language and gestures
-- People wearing normal, current-day Korean clothing (NOT uniforms or costumes)
-- Clear, undistorted, natural human proportions and features
+Lighting: Soft natural light (morning/afternoon), realistic shadows, true Korean colors (neutral tones, NO oversaturation, NO HDR).
 
-Atmosphere:
-- Genuine, achievable, real-world Korean scenarios
-- Everyday moments that actually happen in Korea right now
-- Realistic interactions between Korean people
-- Natural lighting - daylight, indoor lighting as it actually appears
+Composition: Eye-level, candid moment, subject sharp with subtle background blur. Documentary photography aesthetic.
 
-Technical Requirements:
-- Sharp focus, professional photography quality
-- Natural colors - realistic Korean complexion and environment colors
-- Proper depth of field
-- NO digital effects, NO CGI, NO artificial enhancements
-- Documentary photography style
+FORBIDDEN: ❌ Cartoon/illustration/anime style ❌ 3D render ❌ Sci-fi/fantasy ❌ Stock photo poses ❌ Heavy makeup ❌ Studio lighting ❌ Visible text ❌ Foreign locations
 
-Strictly Prohibited Elements:
-- NO science fiction or futuristic technology
-- NO fantasy or unrealistic scenarios
-- NO foreign or non-Korean settings
-- NO text, signs, logos, or readable Korean/English characters
-- NO distorted or warped faces
-- NO stock photo or staged feel
-- NO overly posed or artificial scenes
-- NO uniforms, costumes, or sci-fi clothing
-- NO flying objects, holograms, or impossible technology
-- NO generic Asian stereotypes
+Reference: Korean TV drama stills (Reply 1988, My Mister), Korean photojournalism (한겨레/경향신문).
 
-Style Reference: Korean documentary photography, Korean photojournalism, real Korean life captured authentically.
-
-CRITICAL: The image must depict something that could realistically be photographed in South Korea TODAY - no future technology, no sci-fi, no fantasy. Just real Korean people in real Korean places doing real, everyday things.
+MUST look like: Real photo taken in Korea TODAY with professional camera.
 """
 
 # ==================== 데이터베이스 (Database) ====================
@@ -759,44 +728,254 @@ def batch_generate_images(prompts: List[str], size: str = "1024x1024", quality: 
 
 # ==================== PDF/ZIP 내보내기 (Export Manager) ====================
 
-def create_pdf_report(policy: Dict[str, Any], analysis: Dict[str, Any]) -> bytes:
-    """한글 정책 보고서 PDF 생성"""
+def create_pdf_report(policy: Dict[str, Any], analysis: Dict[str, Any], images: List[bytes] = None, video_prompts: List[str] = None) -> bytes:
+    """한글 정책 보고서 PDF 생성 - AI 분석 9개 항목 전체 포함"""
     
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
-    # 한글 폰트 등록
+    # 한글 폰트
     try:
         pdfmetrics.registerFont(UnicodeCIDFont('HYSMyeongJo-Medium'))
         font_name = 'HYSMyeongJo-Medium'
     except:
         font_name = 'Helvetica'
     
-    # 제목
-    c.setFont(font_name, 20)
-    c.drawString(50, height - 50, "정책 보고서")
+    def new_page():
+        c.showPage()
+        return height - 50
     
+    def add_heading(y, text, size=14):
+        if y < 100:
+            y = new_page()
+        c.setFont(font_name, size)
+        c.drawString(50, y, text[:90])
+        return y - (size + 15)
+    
+    def add_text(y, text, size=10, indent=60):
+        if y < 80:
+            y = new_page()
+        c.setFont(font_name, size)
+        max_len = 85 if indent == 60 else 90
+        lines = [text[i:i+max_len] for i in range(0, min(len(text), 400), max_len)]
+        for line in lines[:10]:
+            if y < 60:
+                y = new_page()
+                c.setFont(font_name, size)
+            c.drawString(indent, y, line)
+            y -= (size + 4)
+        return y - 5
+    
+    y = height - 50
+    
+    # 표지
+    c.setFont(font_name, 24)
+    c.drawString(50, y, "정책 보고서")
+    y -= 50
     c.setFont(font_name, 14)
-    c.drawString(50, height - 80, f"제목: {policy['title']}")
-    c.drawString(50, height - 100, f"카테고리: {policy['category']}")
-    c.drawString(50, height - 120, f"대상: {policy['target_audience']}")
+    c.drawString(50, y, f"제목: {policy.get('title', '')[:50]}")
+    y -= 25
+    c.setFont(font_name, 11)
+    c.drawString(50, y, f"카테고리: {policy.get('category', '')[:60]}")
+    y -= 20
+    c.drawString(50, y, f"대상: {policy.get('target_audience', '')}")
+    y -= 20
+    c.drawString(50, y, f"생성일: {policy.get('created_at', '')}")
     
-    c.setFont(font_name, 10)
-    y_position = height - 160
+    if not analysis:
+        c.save()
+        buffer.seek(0)
+        return buffer.read()
     
-    # 정책 설명
-    if policy.get('description'):
-        c.drawString(50, y_position, "정책 설명:")
-        y_position -= 20
-        desc_lines = policy['description'][:200].split('\n')
-        for line in desc_lines[:5]:
-            c.drawString(60, y_position, line[:80])
-            y_position -= 15
+    y = new_page()
     
-    c.showPage()
+    # ===== 1. 정책 기획 =====
+    y = add_heading(y, "1. 정책 기획", 16)
+    if "policy_planning" in analysis:
+        planning = analysis["policy_planning"]
+        
+        if planning.get("objective"):
+            y = add_text(y, f"[목표] {planning['objective']}", 10, 60)
+        
+        if planning.get("target_analysis"):
+            y = add_text(y, f"[대상 분석] {planning['target_analysis']}", 10, 60)
+        
+        if planning.get("key_strategies"):
+            y = add_text(y, "[핵심 전략]", 11, 60)
+            for idx, s in enumerate(planning["key_strategies"][:8], 1):
+                y = add_text(y, f"{idx}. {s}", 10, 70)
+        
+        if planning.get("expected_outcomes"):
+            y = add_text(y, "[기대 효과]", 11, 60)
+            for o in planning["expected_outcomes"][:5]:
+                y = add_text(y, f"• {o}", 10, 70)
+    
+    y -= 15
+    
+    # ===== 2. 실행 계획 =====
+    if y < 150:
+        y = new_page()
+    y = add_heading(y, "2. 실행 계획", 16)
+    if "execution_plan" in analysis:
+        execution = analysis["execution_plan"]
+        
+        if execution.get("action_items"):
+            y = add_text(y, "[실행 항목]", 11, 60)
+            for idx, item in enumerate(execution["action_items"][:8], 1):
+                y = add_text(y, f"{idx}. {item.get('action', '')}", 10, 70)
+        
+        if execution.get("resources_needed"):
+            res = execution["resources_needed"]
+            y = add_text(y, "[필요 자원]", 11, 60)
+            if res.get("budget_range"):
+                y = add_text(y, f"예산: {res['budget_range']}", 10, 70)
+            if res.get("personnel"):
+                y = add_text(y, f"인력: {res['personnel']}", 10, 70)
+    
+    y -= 15
+    
+    # ===== 3. 커뮤니케이션 전략 =====
+    if y < 150:
+        y = new_page()
+    y = add_heading(y, "3. 커뮤니케이션 전략", 16)
+    if "communication_strategy" in analysis:
+        comm = analysis["communication_strategy"]
+        
+        if comm.get("key_messages"):
+            y = add_text(y, "[핵심 메시지]", 11, 60)
+            for idx, msg in enumerate(comm["key_messages"][:8], 1):
+                y = add_text(y, f"{idx}. {msg}", 10, 70)
+        
+        if comm.get("channels"):
+            y = add_text(y, "[채널 전략]", 11, 60)
+            for ch in comm["channels"][:5]:
+                y = add_text(y, f"• {ch.get('channel', '')}: {ch.get('content_type', '')}", 10, 70)
+    
+    y -= 15
+    
+    # ===== 4. 콘텐츠 제작 브리프 =====
+    if y < 150:
+        y = new_page()
+    y = add_heading(y, "4. 콘텐츠 제작 브리프", 16)
+    if "content_briefs" in analysis:
+        briefs = analysis["content_briefs"]
+        
+        if "image_brief_1" in briefs:
+            b1 = briefs["image_brief_1"]
+            y = add_text(y, "[이미지 브리프 1]", 11, 60)
+            y = add_text(y, f"컨셉: {b1.get('concept', '')}", 10, 70)
+            y = add_text(y, f"장면: {b1.get('scene_description', '')}", 10, 70)
+        
+        if "image_brief_2" in briefs:
+            b2 = briefs["image_brief_2"]
+            y = add_text(y, "[이미지 브리프 2]", 11, 60)
+            y = add_text(y, f"컨셉: {b2.get('concept', '')}", 10, 70)
+            y = add_text(y, f"장면: {b2.get('scene_description', '')}", 10, 70)
+        
+        if "video_brief" in briefs:
+            vb = briefs["video_brief"]
+            y = add_text(y, "[영상 브리프]", 11, 60)
+            y = add_text(y, f"스토리: {vb.get('narrative_arc', '')}", 10, 70)
+    
+    y -= 15
+    
+    # ===== 5. 마케팅 자료 =====
+    if y < 150:
+        y = new_page()
+    y = add_heading(y, "5. 마케팅 자료", 16)
+    if "marketing_materials" in analysis:
+        mk = analysis["marketing_materials"]
+        
+        if mk.get("slogan"):
+            y = add_text(y, f"[슬로건] {mk['slogan']}", 11, 60)
+        
+        if mk.get("tagline"):
+            y = add_text(y, f"[태그라인] {mk['tagline']}", 10, 60)
+        
+        if mk.get("elevator_pitch"):
+            y = add_text(y, f"[엘리베이터 피치] {mk['elevator_pitch']}", 10, 60)
+        
+        if mk.get("social_media_posts"):
+            y = add_text(y, "[소셜미디어 콘텐츠]", 11, 60)
+            for idx, post in enumerate(mk["social_media_posts"][:5], 1):
+                y = add_text(y, f"{idx}. {post.get('platform', '')}: {post.get('content', '')}", 10, 70)
+    
+    y -= 15
+    
+    # ===== 6. 성과 지표 (KPI) =====
+    if y < 150:
+        y = new_page()
+    y = add_heading(y, "6. 성과 지표 (KPI)", 16)
+    if "performance_metrics" in analysis:
+        metrics = analysis["performance_metrics"]
+        
+        if metrics.get("kpi_framework"):
+            y = add_text(y, "[KPI 프레임워크]", 11, 60)
+            for idx, kpi in enumerate(metrics["kpi_framework"][:8], 1):
+                y = add_text(y, f"{idx}. {kpi.get('metric', '')}", 10, 70)
+                if kpi.get("target_range"):
+                    y = add_text(y, f"   목표: {kpi['target_range']}", 9, 75)
+        
+        if metrics.get("success_criteria"):
+            y = add_text(y, "[성공 기준]", 11, 60)
+            for sc in metrics["success_criteria"][:5]:
+                y = add_text(y, f"• {sc}", 10, 70)
+    
+    y -= 15
+    
+    # ===== 7. 이해관계자 관리 =====
+    if y < 150:
+        y = new_page()
+    y = add_heading(y, "7. 이해관계자 관리", 16)
+    if "stakeholder_management" in analysis:
+        sh = analysis["stakeholder_management"]
+        
+        if sh.get("stakeholders"):
+            y = add_text(y, "[이해관계자 분석]", 11, 60)
+            for idx, s in enumerate(sh["stakeholders"][:6], 1):
+                y = add_text(y, f"{idx}. {s.get('group', '')}: {s.get('interests', '')}", 10, 70)
+        
+        if sh.get("objection_handling"):
+            y = add_text(y, "[반대 의견 대응]", 11, 60)
+            for obj in sh["objection_handling"][:4]:
+                y = add_text(y, f"• 반대: {obj.get('objection', '')}", 10, 70)
+                y = add_text(y, f"  대응: {obj.get('response', '')}", 9, 75)
+    
+    y -= 15
+    
+    # ===== 8. 이미지 프롬프트 =====
+    if images:
+        if y < 150:
+            y = new_page()
+        y = add_heading(y, "8. 생성된 이미지", 16)
+        
+        for idx, img_bytes in enumerate(images[:4], 1):
+            if y < 250:
+                y = new_page()
+            try:
+                img = ImageReader(BytesIO(img_bytes))
+                c.drawImage(img, 50, y - 200, width=450, height=200, preserveAspectRatio=True)
+                y -= 220
+                c.setFont(font_name, 10)
+                c.drawString(50, y, f"이미지 {idx}")
+                y -= 30
+            except:
+                pass
+    
+    # ===== 9. 영상 프롬프트 =====
+    if video_prompts:
+        y = new_page()
+        y = add_heading(y, "9. 영상 프롬프트", 16)
+        
+        for idx, prompt in enumerate(video_prompts[:9], 1):
+            if y < 150:
+                y = new_page()
+            y = add_text(y, f"[영상 {idx}]", 11, 60)
+            y = add_text(y, prompt[:600], 9, 70)
+            y -= 15
+    
     c.save()
-    
     buffer.seek(0)
     return buffer.read()
 
@@ -804,13 +983,18 @@ def create_zip_export(
     policy: Dict[str, Any],
     analysis: Dict[str, Any],
     images: List[bytes] = None,
-    video_prompts: List[str] = None
+    video_prompts: List[str] = None,
+    pdf_bytes: bytes = None
 ) -> bytes:
-    """모든 자료를 ZIP으로 압축"""
+    """모든 자료를 ZIP으로 압축 (PDF 포함)"""
     
     buffer = BytesIO()
     
     with ZipFile(buffer, 'w') as zipf:
+        # PDF 보고서 (최우선)
+        if pdf_bytes:
+            zipf.writestr("정책_보고서_전체.pdf", pdf_bytes)
+        
         # 정책 정보
         zipf.writestr("policy_info.json", json.dumps(policy, ensure_ascii=False, indent=2))
         
@@ -835,15 +1019,17 @@ def create_zip_export(
 생성일: {policy['created_at']}
 
 포함 내용:
+- 정책_보고서_전체.pdf: AI 분석 7개 섹션 + 이미지 + 영상 프롬프트 전체 (PDF)
 - policy_info.json: 정책 기본 정보
-- analysis_full.json: AI 분석 전체 결과
+- analysis_full.json: AI 분석 전체 결과 (JSON)
 - images/: 생성된 이미지
 - video_prompts/: 영상 제작 프롬프트
 
 사용 방법:
-1. analysis_full.json을 열어 전체 분석 내용 확인
-2. images 폴더의 이미지 활용
-3. video_prompts의 프롬프트를 Runway, Pika 등에 입력
+1. 정책_보고서_전체.pdf를 열어 전체 내용 확인 (권장)
+2. analysis_full.json을 열어 JSON 형태로 확인
+3. images 폴더의 이미지 활용
+4. video_prompts의 프롬프트를 Sora, Runway, Pika 등에 입력
 """
         zipf.writestr("README.txt", readme)
     
@@ -1033,34 +1219,101 @@ with tab1:
         # 카테고리 데이터베이스
         category_database = {
             "환경": {
-                "대기질": ["미세먼지 저감", "대기오염 관리", "실시간 모니터링", "배출가스 규제"],
-                "수질": ["하천 정화", "상수도 개선", "하수처리", "수질 모니터링"],
-                "폐기물": ["쓰레기 감량", "재활용", "음식물쓰레기", "일회용품 규제"],
-                "에너지": ["신재생에너지", "태양광", "풍력", "에너지 효율화", "절전"],
-                "기후변화": ["탄소중립", "온실가스 감축", "기후 적응", "ESG"]
+                "대기질": ["미세먼지 저감", "대기오염 관리", "실시간 모니터링", "배출가스 규제", "대기질 예보", "미세먼지 신호등", "클린존 조성", "대기오염 총량제", "배출권 거래", "친환경차 보급", "경유차 저감", "공장 배출 관리"],
+                "수질": ["하천 정화", "상수도 개선", "하수처리", "수질 모니터링", "물 절약", "빗물 저장", "하천 생태 복원", "정수장 현대화", "상수도 누수 방지", "지하수 관리", "녹조 관리", "수변 정화"],
+                "폐기물": ["쓰레기 감량", "재활용", "음식물쓰레기", "일회용품 규제", "폐기물 분리배출", "자원순환", "재활용센터", "리필스테이션", "플라스틱 줄이기", "생활쓰레기 종량제", "대형폐기물 수거", "불법투기 단속", "재활용 마을", "업사이클링"],
+                "에너지": ["신재생에너지", "태양광", "풍력", "에너지 효율화", "절전", "에너지 저장", "스마트그리드", "제로에너지 건축", "에너지 자립마을", "수소에너지", "지열에너지", "LED 조명 교체", "건물 에너지관리", "에너지 진단"],
+                "기후변화": ["탄소중립", "온실가스 감축", "기후 적응", "ESG", "탄소배출권", "기후위기 대응", "그린뉴딜", "Net-Zero", "기후변화 교육", "탄소발자국", "기후 취약계층 지원", "폭염 대응", "한파 대비"],
+                "녹지": ["도시숲", "공원 조성", "가로수", "옥상녹화", "벽면녹화", "생태공원", "습지 보호", "생물다양성", "도심 숲길", "미세먼지 차단숲", "녹지축 연결", "나무 심기", "정원도시"]
             },
             "교통": {
-                "대중교통": ["버스 노선 개편", "지하철 확충", "환승 편의", "요금 정책"],
-                "주차": ["공영주차장", "주차난 해소", "불법주차 단속", "공유주차"],
-                "보행": ["보행자 우선", "보행로 확충", "횡단보도 개선", "무장애 도로"],
-                "자전거": ["자전거 도로", "공유자전거", "자전거 주차장", "안전 인프라"]
+                "대중교통": ["버스 노선 개편", "지하철 확충", "환승 편의", "요금 정책", "심야버스", "광역버스", "마을버스", "저상버스", "교통카드 통합", "실시간 도착 정보", "BRT", "버스 전용차로", "환승센터", "대중교통 요금 할인", "무료환승"],
+                "주차": ["공영주차장", "주차난 해소", "불법주차 단속", "공유주차", "주차장 확충", "거주자우선주차", "공공주차장", "주차요금 정책", "노상주차장", "기계식 주차장", "주차정보 시스템", "주차 공간 공유", "주차 앱", "친환경 주차장"],
+                "보행": ["보행자 우선", "보행로 확충", "횡단보도 개선", "무장애 도로", "보행권 보장", "보행환경 개선", "보행섬", "보행신호 연장", "보행 안전", "스쿨존", "실버존", "안전한 통학로", "보행자 전용거리", "보차분리"],
+                "자전거": ["자전거 도로", "공유자전거", "자전거 주차장", "안전 인프라", "자전거 도로망", "따릉이", "자전거 수리소", "자전거 거치대", "자전거 보관소", "자전거 교육", "자전거 안전모", "자전거 우선도로"],
+                "교통안전": ["교통사고 예방", "과속 단속", "신호위반 단속", "음주운전 단속", "교통약자 보호", "교통안전 교육", "어린이보호구역", "노인보호구역", "교통섬", "과속방지턱", "안전표지판", "신호등 개선"],
+                "스마트 교통": ["ITS", "교통정보 시스템", "신호제어 시스템", "교통데이터", "스마트 신호등", "AI 교통관리", "자율주행", "모빌리티", "공유모빌리티", "전기차 충전소", "수소차 충전소", "킥보드 정책"]
             },
             "복지": {
-                "노인복지": ["경로당 지원", "돌봄 서비스", "일자리 창출", "건강관리", "치매 예방"],
-                "아동복지": ["보육 지원", "놀이터 확충", "아동학대 예방", "방과후 돌봄"],
-                "청년복지": ["주거 지원", "취업 지원", "청년수당", "창업 지원"]
+                "노인복지": ["경로당 지원", "돌봄 서비스", "일자리 창출", "건강관리", "치매 예방", "노인 여가", "효도수당", "경로우대", "실버카페", "노인 일자리", "노인 돌봄", "독거노인 지원", "어르신 급식", "노인복지관", "치매 안심센터", "노인 건강검진", "노인 의료지원", "효도관광", "실버타운"],
+                "아동복지": ["보육 지원", "놀이터 확충", "아동학대 예방", "방과후 돌봄", "어린이집 확충", "국공립 어린이집", "보육료 지원", "아동수당", "출산장려금", "육아휴직", "놀이터 안전", "아이돌봄 서비스", "아동급식", "아동보호", "아동센터"],
+                "청년복지": ["주거 지원", "취업 지원", "청년수당", "창업 지원", "청년주택", "청년 일자리", "청년 수당", "청년 공간", "청년 문화", "청년 활동", "청년 정책", "청년 참여", "대학생 지원", "취업 교육", "구직 지원"],
+                "장애인복지": ["장애인 일자리", "편의시설", "이동권 보장", "활동지원", "장애인 복지관", "장애인 수당", "재활치료", "특수교육", "장애인 주차", "저상버스", "장애인 체육", "장애인 문화", "장애인콜택시", "무장애공간"],
+                "여성복지": ["여성 일자리", "경력단절 예방", "여성 안전", "여성 폭력 예방", "여성 복지관", "경단녀 재취업", "여성 창업", "여성 건강", "여성 상담", "한부모 지원", "미혼모 지원", "성평등", "여성 친화도시"],
+                "저소득층 지원": ["기초생활보장", "긴급복지", "생계지원", "의료지원", "교육지원", "주거지원", "복지사각지대", "푸드뱅크", "물가지원", "에너지바우처", "난방비 지원", "취약계층 보호"]
             },
             "교육": {
-                "학교교육": ["교육과정 개선", "학교시설 현대화", "무상급식", "돌봄교실"],
-                "평생교육": ["성인 교육", "직업훈련", "온라인 강좌", "학습 지원"]
+                "학교교육": ["교육과정 개선", "학교시설 현대화", "무상급식", "돌봄교실", "학교 안전", "교육환경 개선", "스마트 교실", "교육 기자재", "급식 품질", "학교 공기청정기", "학교 냉난방", "학교 화장실", "학교 체육관", "학교 도서관", "교육 복지"],
+                "평생교육": ["성인 교육", "직업훈련", "온라인 강좌", "학습 지원", "평생학습관", "시민대학", "문해교육", "학력인정", "자격증 교육", "재교육", "평생학습도시"],
+                "유아교육": ["유치원 확충", "국공립유치원", "유아 교육비", "유아 돌봄", "누리과정", "유아 안전", "유아 체험", "유아 급식", "유아 놀이"],
+                "특수교육": ["특수학교", "특수학급", "통합교육", "특수교사", "특수교육 지원", "발달장애 교육", "특수교육 기자재", "치료지원"],
+                "방과후·돌봄": ["방과후 학교", "초등돌봄", "아침돌봄", "저녁돌봄", "돌봄교실 확충", "지역아동센터", "다함께돌봄센터", "청소년방과후아카데미"]
             },
             "안전": {
-                "재난안전": ["화재 예방", "지진 대비", "태풍 대비", "재난 대응 훈련"],
-                "범죄예방": ["CCTV 확충", "안심귀가", "학교폭력 예방", "성범죄 예방"]
+                "재난안전": ["화재 예방", "지진 대비", "태풍 대비", "재난 대응 훈련", "소방시설", "소화기 보급", "화재경보기", "재난문자", "재난대피소", "풍수해 대비", "산사태 예방", "붕괴사고 예방", "가스안전", "전기안전", "승강기 안전", "화학사고 대응", "방사능 대응", "안전문화", "재난안전 교육"],
+                "범죄예방": ["CCTV 확충", "안심귀가", "학교폭력 예방", "성범죄 예방", "범죄 취약지역", "방범등", "비상벨", "여성안심택배함", "여성안심귀갓길", "아동안전", "실종아동 예방", "가정폭력 예방", "스토킹 예방", "디지털성범죄 예방"],
+                "식품안전": ["식품위생", "위생점검", "학교급식 안전", "식중독 예방", "HACCP", "원산지 표시", "식품검사", "위생등급제", "불량식품 단속"],
+                "생활안전": ["어린이놀이터 안전", "승강기 안전", "제품안전", "생활체육 안전", "수상안전", "등산로 안전", "야영장 안전", "레저안전", "시설물 안전점검"],
+                "보건안전": ["감염병 예방", "방역", "공중보건", "의료안전", "정신건강", "자살예방", "코로나19 대응", "예방접종", "건강검진"]
             },
             "경제": {
-                "일자리": ["일자리 창출", "구직 지원", "직업 훈련", "고용 안정"],
-                "창업": ["창업 교육", "자금 지원", "멘토링", "공유 오피스"]
+                "일자리": ["일자리 창출", "구직 지원", "직업 훈련", "고용 안정", "청년일자리", "중장년일자리", "여성일자리", "노인일자리", "장애인일자리", "취업박람회", "일자리센터", "고용보험", "직업상담", "취업알선", "워라밸"],
+                "창업": ["창업 교육", "자금 지원", "멘토링", "공유 오피스", "창업보육센터", "스타트업", "벤처기업", "소상공인 지원", "예비창업자", "1인창업", "청년창업", "여성창업", "시니어창업"],
+                "소상공인": ["소상공인 지원", "전통시장 활성화", "골목상권 보호", "상가임대차 보호", "착한임대인", "배달앱 수수료", "공공배달앱", "제로페이", "소상공인 대출", "컨설팅 지원", "온라인 판로"],
+                "지역경제": ["로컬푸드", "지역화폐", "지역상품권", "지역 특산품", "로컬크리에이터", "도시재생", "구도심 활성화", "전통시장", "재래시장", "상권 활성화", "지역 일자리"],
+                "기업지원": ["중소기업 지원", "기업 유치", "산업단지", "투자유치", "수출지원", "R&D 지원", "기술개발", "기업 컨설팅", "기업 금융", "기업 교육"]
+            },
+            "문화": {
+                "문화시설": ["문화센터", "도서관", "박물관", "미술관", "공연장", "전시관", "문화공간", "북카페", "작은도서관", "마을도서관", "공공도서관", "문화공원", "문화거리"],
+                "문화행사": ["축제", "공연", "전시", "영화제", "음악회", "거리공연", "문화예술제", "지역축제", "전통문화축제", "계절축제", "야간문화행사", "주말공연"],
+                "문화예술": ["예술교육", "문화강좌", "예술단체 지원", "예술인 지원", "공공미술", "문화예술 동아리", "아마추어 예술", "생활예술", "시민예술가", "문화동호회"],
+                "전통문화": ["문화재 보존", "전통문화 계승", "향토문화", "무형문화재", "한옥마을", "전통시장", "전통음식", "전통공예", "민속놀이", "전통의례"],
+                "관광": ["관광지 개발", "관광 홍보", "관광안내", "관광코스", "체험관광", "생태관광", "문화관광", "역사관광", "관광상품", "관광 편의시설"]
+            },
+            "주거": {
+                "공공주택": ["공공임대", "영구임대", "국민임대", "행복주택", "매입임대", "전세임대", "공공분양", "공공주택 확충", "주거복지", "주거급여", "주택바우처"],
+                "주거환경": ["노후주택 개선", "주거환경 개선", "빈집정비", "주택리모델링", "슬레이트 제거", "주택 에너지효율", "단열 개선", "보일러 교체", "주거 안전", "주택방역"],
+                "청년주거": ["청년주택", "청년임대", "청년전세", "셰어하우스", "대학생 기숙사", "청년 주거비 지원", "청년 월세 지원", "청년 전세자금"],
+                "주거취약계층": ["쪽방촌", "고시원", "비닐하우스", "컨테이너", "반지하", "옥탑방", "주거복지센터", "주거상담", "주거비 지원", "긴급주거지원"]
+            },
+            "건설·도시": {
+                "도시계획": ["도시재생", "도심재개발", "뉴타운", "도시 정비", "도시설계", "스마트시티", "친환경도시", "압축도시", "직주근접", "복합용도"],
+                "건설": ["토목공사", "도로건설", "교량건설", "터널공사", "하천정비", "제방", "항만", "인프라", "공공시설", "체육시설 건설"],
+                "도시미관": ["경관 개선", "간판정비", "불법광고물 정비", "가로환경", "도시디자인", "공공디자인", "색채계획", "야간경관", "조명"],
+                "마을만들기": ["주민자치", "마을공동체", "도시재생 뉴딜", "골목길 재생", "마을 주차장", "마을회관", "마을 공동이용시설", "마을 텃밭", "마을 쉼터"]
+            },
+            "농업·농촌": {
+                "농업": ["스마트팜", "친환경농업", "유기농", "도시농업", "주말농장", "텃밭", "농업기술", "농기계", "농업인 교육", "청년농업인", "귀농"],
+                "농촌": ["농촌개발", "농촌관광", "농촌체험", "귀촌", "농촌주택", "농촌복지", "농촌 의료", "농촌 교통", "농촌 일자리", "농촌 인구"],
+                "유통": ["직거래장터", "농산물 직판장", "로컬푸드", "농협판매장", "온라인 판매", "농산물 수출", "농산물 가공", "6차 산업", "푸드플랜"]
+            },
+            "보건·의료": {
+                "공공의료": ["보건소", "공공병원", "의료취약지역", "공공의료 확충", "응급의료", "119구급", "야간진료", "휴일진료", "순회진료"],
+                "건강증진": ["건강검진", "예방접종", "건강교육", "금연", "절주", "영양", "운동", "비만예방", "만성질환 관리", "암검진", "구강검진"],
+                "정신건강": ["정신건강 복지센터", "자살예방", "심리상담", "트라우마 치료", "중독 치료", "스트레스 관리", "우울증", "불안장애", "정신건강 교육"],
+                "의료지원": ["의료비 지원", "취약계층 의료", "난임 지원", "출산 지원", "영유아 건강", "노인 의료", "장애인 의료", "희귀질환", "중증질환"]
+            },
+            "디지털·ICT": {
+                "스마트도시": ["스마트시티", "IoT", "빅데이터", "AI 활용", "디지털트윈", "5G", "공공와이파이", "디지털 인프라", "통신망"],
+                "전자정부": ["전자민원", "온라인 행정", "모바일 앱", "디지털 서비스", "행정정보 공개", "데이터 개방", "공공데이터", "정보화 사업"],
+                "디지털 격차 해소": ["디지털 교육", "정보화 교육", "취약계층 정보화", "시니어 IT교육", "디지털 리터러시", "키오스크 교육", "스마트폰 교육"],
+                "정보보호": ["개인정보 보호", "사이버보안", "정보보안", "해킹 방지", "피싱 예방", "랜섬웨어 대응", "정보보호 교육"]
+            },
+            "체육": {
+                "생활체육": ["체육시설", "체육교실", "동네체육관", "공공체육시설", "수영장", "헬스장", "테니스장", "축구장", "농구장", "배드민턴장", "체육프로그램", "생활체육클럽"],
+                "전문체육": ["선수 육성", "체육 꿈나무", "유망주 발굴", "체육 영재", "엘리트 체육", "전문체육인 지원", "체육대회 개최"],
+                "건강체육": ["걷기운동", "등산", "자전거타기", "국민체조", "건강 프로그램", "건강걷기", "트레킹", "마라톤", "산책로"]
+            },
+            "과학·기술": {
+                "R&D": ["연구개발", "기술개발", "신기술", "산학협력", "연구지원", "연구소", "실험실", "기술사업화", "기술이전"],
+                "혁신": ["혁신성장", "기술혁신", "산업혁신", "디지털 전환", "그린전환", "미래기술", "첨단기술", "4차산업", "바이오", "나노", "로봇"],
+                "과학문화": ["과학관", "과학체험", "과학교육", "과학축제", "메이커스페이스", "과학동아리", "발명교육", "코딩교육"]
+            },
+            "행정·참여": {
+                "주민참여": ["주민자치", "주민참여예산", "마을회의", "주민총회", "공론화", "주민투표", "주민제안", "주민소통", "시민참여"],
+                "민원": ["민원처리", "원스톱 민원", "찾아가는 민원", "무인민원발급기", "민원상담", "고충민원", "민원 만족도"],
+                "열린행정": ["정보공개", "행정투명성", "시민감사관", "옴부즈만", "청렴도", "반부패", "공익신고", "행정혁신"],
+                "소통·홍보": ["시민소통", "정책홍보", "SNS 소통", "언론홍보", "시정소식", "주민설명회", "간담회", "타운홀미팅"]
             }
         }
         
@@ -1111,6 +1364,27 @@ with tab1:
         else:
             # 입력이 없을 때는 도움말만 표시 (모바일 최적화)
             st.caption("💡 카테고리 입력 시 자동완성이 표시됩니다. 또는 아래 전체 카테고리에서 선택하세요.")
+        
+        # 전체 카테고리 리스트 표시 (expander로)
+        with st.expander("📚 전체 카테고리 목록 보기 (클릭하여 선택)"):
+            st.caption("원하는 세부 항목을 클릭하면 자동으로 입력됩니다")
+            
+            for main_cat, sub_cats in category_database.items():
+                st.markdown(f"#### {main_cat}")
+                for sub_cat, items in sub_cats.items():
+                    st.markdown(f"**{sub_cat}**")
+                    
+                    # 세부 항목마다 선택 버튼
+                    for item in items:
+                        cols = st.columns([4, 1])
+                        with cols[0]:
+                            st.write(f"• {item}")
+                        with cols[1]:
+                            if st.button("선택", key=f"select_full_{main_cat}_{sub_cat}_{item}", use_container_width=True):
+                                st.session_state.temp_selection = f"{main_cat} > {sub_cat} > {item}"
+                                st.rerun()
+                    
+                    st.divider()
         
         target_audience = st.selectbox(
             "주요 대상 *",
@@ -1526,7 +1800,7 @@ with tab4:
                             key=f"video_doc_{set_idx}"
                         )
                         
-                        col1, col2, col3 = st.columns(3)
+                        col1, col2, col3, col4 = st.columns(4)
                         with col1:
                             st.download_button(
                                 "💾 다운로드",
@@ -1537,8 +1811,10 @@ with tab4:
                                 use_container_width=True
                             )
                         with col2:
-                            st.link_button("🚀 Runway", VIDEO_PLATFORMS["Runway"], use_container_width=True)
+                            st.link_button("🎬 Sora", VIDEO_PLATFORMS["Sora"], use_container_width=True)
                         with col3:
+                            st.link_button("🚀 Runway", VIDEO_PLATFORMS["Runway"], use_container_width=True)
+                        with col4:
                             st.link_button("🎥 Pika", VIDEO_PLATFORMS["Pika"], use_container_width=True)
                     
                     # 스타일 2: 시네마틱
@@ -1550,7 +1826,7 @@ with tab4:
                             key=f"video_cine_{set_idx}"
                         )
                         
-                        col1, col2, col3 = st.columns(3)
+                        col1, col2, col3, col4 = st.columns(4)
                         with col1:
                             st.download_button(
                                 "💾 다운로드",
@@ -1561,8 +1837,10 @@ with tab4:
                                 use_container_width=True
                             )
                         with col2:
-                            st.link_button("🚀 Runway", VIDEO_PLATFORMS["Runway"], use_container_width=True)
+                            st.link_button("🎬 Sora", VIDEO_PLATFORMS["Sora"], use_container_width=True)
                         with col3:
+                            st.link_button("🚀 Runway", VIDEO_PLATFORMS["Runway"], use_container_width=True)
+                        with col4:
                             st.link_button("🎥 Pika", VIDEO_PLATFORMS["Pika"], use_container_width=True)
                     
                     # 스타일 3: 모던 다이내믹
@@ -1574,7 +1852,7 @@ with tab4:
                             key=f"video_modern_{set_idx}"
                         )
                         
-                        col1, col2, col3 = st.columns(3)
+                        col1, col2, col3, col4 = st.columns(4)
                         with col1:
                             st.download_button(
                                 "💾 다운로드",
@@ -1585,13 +1863,24 @@ with tab4:
                                 use_container_width=True
                             )
                         with col2:
-                            st.link_button("🚀 Runway", VIDEO_PLATFORMS["Runway"], use_container_width=True)
+                            st.link_button("🎬 Sora", VIDEO_PLATFORMS["Sora"], use_container_width=True)
                         with col3:
+                            st.link_button("🚀 Runway", VIDEO_PLATFORMS["Runway"], use_container_width=True)
+                        with col4:
                             st.link_button("🎥 Pika", VIDEO_PLATFORMS["Pika"], use_container_width=True)
                     
                     st.divider()
             else:
                 st.info("위의 '10초 영상 3종 프롬프트 생성' 버튼을 클릭하세요")
+            
+            st.divider()
+            
+            st.markdown("### 🎥 영상 제작 플랫폼")
+            st.caption("생성된 프롬프트를 아래 플랫폼에서 사용하세요")
+            cols = st.columns(len(VIDEO_PLATFORMS))
+            for idx, (platform, url) in enumerate(VIDEO_PLATFORMS.items()):
+                with cols[idx]:
+                    st.link_button(platform, url, use_container_width=True)
         
         else:
             st.info("영상 브리프가 생성되지 않았습니다")
@@ -1640,7 +1929,22 @@ with tab5:
         with col1:
             if st.button("📄 PDF 보고서", use_container_width=True):
                 with st.spinner("PDF를 생성하고 있습니다..."):
-                    pdf_bytes = create_pdf_report(policy, st.session_state.current_analysis)
+                    # 이미지 바이트 수집
+                    image_bytes = [img['bytes'] for img in st.session_state.generated_images]
+                    
+                    # 영상 프롬프트 텍스트 수집
+                    video_texts = []
+                    for idx, prompt_set in enumerate(st.session_state.video_prompts_3styles, 1):
+                        video_texts.append(f"[세트 {idx} - 다큐멘터리]\n{prompt_set.get('documentary', '')}")
+                        video_texts.append(f"[세트 {idx} - 시네마틱]\n{prompt_set.get('cinematic', '')}")
+                        video_texts.append(f"[세트 {idx} - 모던 다이내믹]\n{prompt_set.get('modern_dynamic', '')}")
+                    
+                    pdf_bytes = create_pdf_report(
+                        policy, 
+                        st.session_state.current_analysis,
+                        images=image_bytes if image_bytes else None,
+                        video_prompts=video_texts if video_texts else None
+                    )
                     st.download_button(
                         "💾 PDF 다운로드",
                         pdf_bytes,
@@ -1654,10 +1958,28 @@ with tab5:
                 with st.spinner("ZIP 파일을 생성하고 있습니다..."):
                     image_bytes = [img['bytes'] for img in st.session_state.generated_images]
                     
+                    # 영상 프롬프트 3종 모두 텍스트로 변환
+                    video_texts = []
+                    for idx, prompt_set in enumerate(st.session_state.video_prompts_3styles, 1):
+                        video_texts.append(f"[세트 {idx} - 다큐멘터리]\n{prompt_set.get('documentary', '')}")
+                        video_texts.append(f"[세트 {idx} - 시네마틱]\n{prompt_set.get('cinematic', '')}")
+                        video_texts.append(f"[세트 {idx} - 모던 다이내믹]\n{prompt_set.get('modern_dynamic', '')}")
+                    
+                    # PDF 먼저 생성
+                    pdf_bytes = create_pdf_report(
+                        policy, 
+                        st.session_state.current_analysis,
+                        images=image_bytes if image_bytes else None,
+                        video_prompts=video_texts if video_texts else None
+                    )
+                    
+                    # ZIP 생성 (PDF 포함)
                     zip_bytes = create_zip_export(
                         policy,
                         st.session_state.current_analysis,
-                        images=image_bytes
+                        images=image_bytes,
+                        video_prompts=video_texts if video_texts else None,
+                        pdf_bytes=pdf_bytes
                     )
                     
                     st.download_button(
