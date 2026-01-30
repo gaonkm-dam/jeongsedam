@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from zipfile import ZipFile
 from dotenv import load_dotenv
 def main():
+    st.title("🔥 main 함수 실행됨")
 
 # 환경 변수 로드
 load_dotenv()
@@ -1993,6 +1994,6 @@ with tab5:
     
     else:
         st.info("정책을 생성하고 AI 분석을 완료해주세요")
-        
+
 if __name__ == "__main__":
     main()
