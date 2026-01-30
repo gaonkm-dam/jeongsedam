@@ -1993,5 +1993,6 @@ with tab5:
     
     else:
         st.info("정책을 생성하고 AI 분석을 완료해주세요")
+        
 if __name__ == "__main__":
     main()
