@@ -1,53 +1,18 @@
-# Python
-*.pyc
-__pycache__/
-*.pyo
-*.pyd
-.Python
-
-# Virtual Environment
-venv/
-.venv/
-env/
-ENV/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Environment Variables
-.env
-.env.local
-
-# Database
+# DB는 클라우드에서 자동 생성되므로 제외
+student_system.db
 *.db
-*.sqlite
-*.sqlite3
-data/*.db
-!data/.gitkeep
 
-# Logs
-*.log
-logs/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Temporary files
-*.tmp
-*.temp
-assets/temp/
-
-# Streamlit
+# secrets는 Streamlit Cloud에서 별도 설정
 .streamlit/secrets.toml
 
-# 문서 파일 (용량이 커서 제외)
-*.docx
-*.pdf
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+.env
 
-# Verdent
-.verdent/
+# 백업 파일
+*.backup
+2월20일 최종 개발 끝/
+학생_학부모_교사 개발 완료 백업/
+학생_학부모개발 완료 백업/
