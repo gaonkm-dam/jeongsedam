@@ -1,0 +1,31 @@
+# DB는 클라우드에서 자동 생성되므로 제외
+student_system.db
+*.db
+
+# secrets는 Streamlit Cloud에서 별도 설정
+.streamlit/secrets.toml
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# 백업 파일
+*.backup
+2월20일 최종 개발 끝/
+학생_학부모_교사 개발 완료 백업/
+학생_학부모개발 완료 백업/
+
+# API 키 / 민감 정보
+api_key.txt
+
+# 개발 완료 아카이브 폴더
+정시 수시개발 완료/
+
+# 테스트 파일
+test_*.py
+
+# 불필요 백업
+database.py.backup
+database_original.py
